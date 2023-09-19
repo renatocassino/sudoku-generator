@@ -1,35 +1,4 @@
-import blessed from 'blessed';
-
-const screen = blessed.screen({
-    smartCSR: true
-});
-screen.title = 'my window title';
-
-const box = blessed.box({
-    top: 'center',
-    left: 'center',
-    width: '50%',
-    height: '50%',
-    content: '',
-    tags: true,
-    border: {
-        type: 'line'
-    },
-    style: {
-        fg: 'white',
-        bg: 'magenta',
-        border: {
-            fg: '#f0f0f0'
-        },
-    }
-});
-
-screen.append(box);
-screen.key(['escape', 'q', 'C-c'], function(ch, key) {
-    return process.exit(0);
-});
-
-screen.render();
+const term = require( 'terminal-kit' ).terminal ;
 
 function sleepSync(milliseconds: number) {
     const date = Date.now();
@@ -70,12 +39,12 @@ class Board {
         boardMap.push('');
 
         let line: string[] = [];
-        const horizontalLine = '------+-------+------';
+        const horizontalLine = ' ------+-------+------ ';
 
         for (let i = 0; i < board.length; i++) {
 
             if (i % 9 === 0 && i > 0) {
-                boardMap.push(line.join(' '));
+                boardMap.push(` ${line.join(' ')} `);
                 line  = [];
             } else if (i % 3 === 0 && i > 0) {
                 line.push("|");
@@ -87,9 +56,43 @@ class Board {
                 boardMap.push(horizontalLine);
             }
         }
-        boardMap.push(line.join(' '));
-        box.setContent(boardMap.join(`\n`));
-        screen.render();
+        boardMap.push(` ${line.join(' ')} `);
+
+        term.moveTo( 0, 0 );
+        term(boardMap.join(`\n`));
+
+        this.drawDebug();
+    }
+
+    drawDebug() {
+        let line: string[] = [];
+        const stack = this.stack;
+        const boardMap: string[] = [];
+        const horizontalLine = ' ------+-------+------ ';
+
+        term('\n\n\n');
+        for (let i = 0; i < 81; i++) {
+
+            if (i % 9 === 0 && i > 0) {
+                boardMap.push(` ${line.join(' ')} `);
+                line  = [];
+            } else if (i % 3 === 0 && i > 0) {
+                line.push("|");
+            }
+
+            if (i in stack) {
+                line.push(stack[i].length.toString());
+            } else {
+                line.push('0');
+            }
+
+            if (i === 27 || i === 54) {
+                boardMap.push(horizontalLine);
+            }
+        }
+        boardMap.push(` ${line.join(' ')} `);
+
+        term(boardMap.join(`\n`));
     }
 
     getColumn(index: number) {
@@ -196,8 +199,16 @@ class Board {
         return this.board[this.board.length - 1] !== 0;
     }
 
+    clearTerminal() {
+        term.moveTo(0, 0);
+
+        for(let i = 0; i < 30; i++) {
+            console.log('                                       ');
+        }
+    }
+
     generate() {
-        let counter = 0;
+        this.clearTerminal();
         while(true) {
             this.createNumber();
             this.counter++;
@@ -206,10 +217,8 @@ class Board {
             if (this.isFinished()) {
                 break;
             }
-            sleepSync(0);
+            // sleepSync(30);
         }
-
-
     }
 
     generateOld() {
