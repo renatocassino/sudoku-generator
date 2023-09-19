@@ -21,17 +21,6 @@ class Board {
         }
     }
 
-    drawLine(text: string, size: number): string {
-        const charsToAdd = size - text.length;
-
-        let finalString = text;
-        for (let i = 0; i < charsToAdd; i++) {
-            finalString += ' ';
-        }
-
-        return finalString;
-    }
-
     drawBoard() {
         let board = this.board;
         const boardMap: string[] = [];
