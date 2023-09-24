@@ -20,7 +20,6 @@ impl Board {
     }
 
     fn draw_board(&mut self) {
-        std::thread::sleep(std::time::Duration::from_millis(200));
         let mut board_map: Vec<String> = vec![];
         board_map.push(format!("counter: {}", self.counter));
         board_map.push(String::from(""));
@@ -173,10 +172,6 @@ impl Board {
 
         self.draw_board();
 
-        if self.board[index as usize] != 0 {
-            return self.create_number(index + 1);
-        }
-
         let mut possible_numbers = self.get_possible_numbers_by_index(index);
         possible_numbers.shuffle(&mut rand::thread_rng());
 
@@ -194,60 +189,13 @@ impl Board {
 
     fn clear_terminal(&mut self) {
         queue!(self.stdout, cursor::MoveTo(0, 0)).unwrap();
-        let line = " ".repeat(200);
         for _ in 0..40 {
-            println!("{}", line);
+            println!("                                             ");
         }
         self.stdout.flush().unwrap();
     }
 
-    fn fill_diagonal(&mut self, start_index: u32) {
-        let mut numbers: Vec<u32> = vec![1, 2, 3, 4, 5, 6, 7, 8, 9];
-        numbers.shuffle(&mut rand::thread_rng());
-
-        let mut index = start_index;
-        for _i in 0..3 {
-            for _j in 0..3 {
-                let number = numbers.pop().unwrap();
-                self.board[index as usize] = number;
-                self.draw_board();
-                index += 1;
-            }
-            index += 9 - 3;
-        }
-    }
-
-    fn fill_diagonals(&mut self) {
-        let indexes_to_start = [0, 30, 60];
-
-        for index in indexes_to_start.iter() {
-            self.fill_diagonal(*index);
-        }
-    }
-
-    fn remove_random(&mut self) {
-        let mut indexes: Vec<u32> = (0..81).collect();
-        indexes.shuffle(&mut rand::thread_rng());
-
-        for _ in 0..40 {
-            let index = indexes.pop().unwrap();
-            self.board[index as usize] = 0;
-            self.draw_board();
-        }
-    }
-
-    fn generate(&mut self, to_play: bool) {
-        self.clear_terminal();
-        self.draw_board();
-        self.fill_diagonals();
-        self.create_number(0);
-        if to_play {
-            self.remove_random();
-        }
-        self.draw_board();
-    }
-
-    fn solve(&mut self) {
+    fn generate(&mut self) {
         self.clear_terminal();
         self.draw_board();
         self.create_number(0);
@@ -257,12 +205,5 @@ impl Board {
 
 fn main() {
     let mut board = Board::new(stdout());
-    board.generate(true);
-
-    // board.board = vec![
-    //     0, 9, 7, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 5, 4, 6, 0, 0, 1, 7, 0, 0, 0, 0, 9,
-    //     0, 0, 0, 0, 0, 5, 2, 0, 0, 0, 9, 8, 0, 0, 7, 0, 3, 0, 0, 0, 0, 1, 0, 0, 6, 0, 0, 0, 4, 0,
-    //     0, 1, 0, 0, 0, 8, 5, 3, 0, 0, 2, 0, 0, 0, 0, 6, 0, 0, 0, 0, 0,
-    // ];
-    board.solve();
+    board.generate();
 }

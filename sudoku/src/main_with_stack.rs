@@ -1,11 +1,12 @@
-use crossterm::{cursor, queue};
+use crossterm::{cursor, queue, QueueableCommand};
 use rand::seq::SliceRandom;
-extern crate rand;
 use std::io::{stdout, Stdout, Write};
 extern crate sys_info;
 
 struct Board {
     pub board: Vec<u32>,
+    pub stack: Vec<Vec<u32>>,
+    pub index: u32,
     pub counter: u32,
     pub stdout: Stdout,
 }
@@ -14,13 +15,14 @@ impl Board {
     fn new(stdout: Stdout) -> Board {
         Board {
             board: vec![0; 81],
+            stack: vec![],
+            index: 0,
             counter: 0,
             stdout,
         }
     }
 
     fn draw_board(&mut self) {
-        std::thread::sleep(std::time::Duration::from_millis(200));
         let mut board_map: Vec<String> = vec![];
         board_map.push(format!("counter: {}", self.counter));
         board_map.push(String::from(""));
@@ -45,6 +47,54 @@ impl Board {
 
         queue!(self.stdout, cursor::MoveTo(0, 0)).unwrap();
         println!("{}", board_map.join("\n"));
+        self.stdout.flush().unwrap();
+
+        self.draw_debug();
+    }
+
+    fn draw_debug(&mut self) {
+        let mut line: Vec<String> = vec![];
+        let mut board_map: Vec<String> = vec![];
+        let horizontal_line = String::from(" ------+-------+------ ");
+
+        println!("\n\n\n");
+        let mut i = 0;
+        while i < 81 {
+            if i % 9 == 0 && i > 0 {
+                board_map.push(format!(" {} ", line.join(" ")));
+                line = vec![];
+            } else if i % 3 == 0 && i > 0 {
+                line.push(String::from("|"));
+            }
+
+            if i < self.stack.len() {
+                line.push(self.stack[i].len().to_string());
+            } else {
+                line.push("0".to_string());
+            }
+
+            if i == 27 || i == 54 {
+                board_map.push(horizontal_line.clone());
+            }
+            i += 1;
+        }
+        board_map.push(format!(" {} ", line.join(" ")));
+
+        println!("{}", board_map.join("\n"));
+
+        println!("");
+        match sys_info::mem_info() {
+            Ok(info) => {
+                println!("Total memory: {} KB", info.total);
+                println!("Free memory: {} KB", info.free);
+                println!("Available memory: {} KB", info.avail);
+                println!("Used memory: {} KB", info.total - info.avail);
+            }
+            Err(e) => {
+                eprintln!("Failed to get memory info: {}", e);
+            }
+        }
+
         self.stdout.flush().unwrap();
     }
 
@@ -166,103 +216,68 @@ impl Board {
         return all_numbers.into_iter().collect();
     }
 
-    fn create_number(&mut self, index: u32) -> bool {
-        if index >= 81 {
-            return true;
+    fn create_number(&mut self) {
+        let mut possible_numbers: Vec<u32> = vec![];
+        if (self.index as usize) < self.stack.len() && !self.stack[self.index as usize].is_empty() {
+            self.stack[self.index as usize] = self.stack[self.index as usize]
+                .iter()
+                .filter(|&&n| n != self.board[self.index as usize])
+                .cloned()
+                .collect();
+
+            possible_numbers = self.stack[self.index as usize].clone();
+        } else {
+            possible_numbers = self.get_possible_numbers_by_index(self.index);
         }
 
-        self.draw_board();
-
-        if self.board[index as usize] != 0 {
-            return self.create_number(index + 1);
+        if possible_numbers.len() == 0 {
+            self.board[self.index as usize] = 0;
+            self.index -= 1;
+            return;
         }
 
-        let mut possible_numbers = self.get_possible_numbers_by_index(index);
-        possible_numbers.shuffle(&mut rand::thread_rng());
+        let random_number = *possible_numbers.choose(&mut rand::thread_rng()).unwrap();
 
-        for number in possible_numbers {
-            self.board[index as usize] = number;
-            self.counter += 1;
-            if self.create_number(index + 1) {
-                return true;
-            }
+        while self.index >= self.stack.len() as u32 {
+            self.stack.push(Vec::new());
         }
+        self.stack[self.index as usize] = possible_numbers;
+        self.board[self.index as usize] = random_number;
+        self.index += 1;
+    }
 
-        self.board[index as usize] = 0;
-        return false;
+    fn is_finished(&self) -> bool {
+        // return this.board[this.board.length - 1] !== 0;
+        if self.board[self.board.len() - 1] == 0 {
+            return false;
+        }
+        return true;
     }
 
     fn clear_terminal(&mut self) {
         queue!(self.stdout, cursor::MoveTo(0, 0)).unwrap();
-        let line = " ".repeat(200);
         for _ in 0..40 {
-            println!("{}", line);
+            println!("                                             ");
         }
         self.stdout.flush().unwrap();
     }
 
-    fn fill_diagonal(&mut self, start_index: u32) {
-        let mut numbers: Vec<u32> = vec![1, 2, 3, 4, 5, 6, 7, 8, 9];
-        numbers.shuffle(&mut rand::thread_rng());
-
-        let mut index = start_index;
-        for _i in 0..3 {
-            for _j in 0..3 {
-                let number = numbers.pop().unwrap();
-                self.board[index as usize] = number;
-                self.draw_board();
-                index += 1;
-            }
-            index += 9 - 3;
-        }
-    }
-
-    fn fill_diagonals(&mut self) {
-        let indexes_to_start = [0, 30, 60];
-
-        for index in indexes_to_start.iter() {
-            self.fill_diagonal(*index);
-        }
-    }
-
-    fn remove_random(&mut self) {
-        let mut indexes: Vec<u32> = (0..81).collect();
-        indexes.shuffle(&mut rand::thread_rng());
-
-        for _ in 0..40 {
-            let index = indexes.pop().unwrap();
-            self.board[index as usize] = 0;
+    fn generate(&mut self) {
+        self.clear_terminal();
+        self.draw_board();
+        loop {
+            self.create_number();
+            self.counter += 1;
             self.draw_board();
-        }
-    }
 
-    fn generate(&mut self, to_play: bool) {
-        self.clear_terminal();
-        self.draw_board();
-        self.fill_diagonals();
-        self.create_number(0);
-        if to_play {
-            self.remove_random();
+            if self.is_finished() {
+                break;
+            }
         }
-        self.draw_board();
-    }
-
-    fn solve(&mut self) {
-        self.clear_terminal();
-        self.draw_board();
-        self.create_number(0);
-        self.draw_board();
     }
 }
 
 fn main() {
     let mut board = Board::new(stdout());
-    board.generate(true);
-
-    // board.board = vec![
-    //     0, 9, 7, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 5, 4, 6, 0, 0, 1, 7, 0, 0, 0, 0, 9,
-    //     0, 0, 0, 0, 0, 5, 2, 0, 0, 0, 9, 8, 0, 0, 7, 0, 3, 0, 0, 0, 0, 1, 0, 0, 6, 0, 0, 0, 4, 0,
-    //     0, 1, 0, 0, 0, 8, 5, 3, 0, 0, 2, 0, 0, 0, 0, 6, 0, 0, 0, 0, 0,
-    // ];
-    board.solve();
+    board.generate();
 }
