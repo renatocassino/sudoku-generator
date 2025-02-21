@@ -11,27 +11,33 @@ function sleepSync(milliseconds: number) {
 class Board {
     board: number[] = [];
     stack: number[][] = [];
-    index = 0;
+    indexStack = 0;
     counter = 0;
-    drawer: any;
+
+    rows: Set<number>[] = [];
+    cols: Set<number>[] = [];
+    quadrant: Set<number>[] = [];
 
     constructor() {
-        for (let i = 0; i < 9*9; i++) {
-            this.board.push(0);
-        }
+        this.rows = Array(9).fill(null).map(() => new Set());
+        this.cols = Array(9).fill(null).map(() => new Set());
+        this.quadrant = Array(9).fill(null).map(() => new Set());
+        this.board = Array(9*9).fill(0);
     }
 
     drawBoard() {
         let board = this.board;
         const boardMap: string[] = [];
         boardMap.push(`counter: ${this.counter}`);
+        // boardMap.push(`rows: ${this.rows.map((r) => Array.from(r).join(',')).join('|')}`);
+        // boardMap.push(`cols: ${this.cols.map((r) => Array.from(r).join(',')).join('|')}`);
+        // boardMap.push(`quadrant: ${this.quadrant.map((r) => Array.from(r).join(',')).join('|')}`);
         boardMap.push('');
 
         let line: string[] = [];
         const horizontalLine = ' ------+-------+------ ';
 
         for (let i = 0; i < board.length; i++) {
-
             if (i % 9 === 0 && i > 0) {
                 boardMap.push(` ${line.join(' ')} `);
                 line  = [];
@@ -39,7 +45,6 @@ class Board {
                 line.push("|");
             }
             line.push(board[i].toString());
-
 
             if (i === 27 || i === 54) {
                 boardMap.push(horizontalLine);
@@ -50,7 +55,7 @@ class Board {
         term.moveTo( 0, 0 );
         term(boardMap.join(`\n`));
 
-        this.drawDebug();
+        // this.drawDebug();
     }
 
     drawDebug() {
@@ -84,87 +89,44 @@ class Board {
         term(boardMap.join(`\n`));
     }
 
-    getColumn(index: number) {
-        let column: number[] = [];
-        for (let i = index - 9; i > 0; i -= 9) {
-            if (this.board[i] === 0) {
-                continue;
-            }
-            column.push(this.board[i]);
-        }
-        for (let i = index + 9; i < this.board.length; i += 9) {
-            if (this.board[i] === 0) {
-                continue;
-            }
-            column.push(this.board[i]);
-        }
-
-        return column;
-    }
-
-    getLine(index: number) {
-        let line: number[] = [];
-        let start = index - (index % 9);
-        for (let i = start; i < start + 9; i++) {
-            if (this.board[i] === 0) {
-                continue;
-            }
-            line.push(this.board[i]);
-        }
-        return line;
-    }
-
-    getQuadrantNumber(index: number): [number, number] {
-        let quadrantX = Math.floor(index / 3) % 3;
-        let quadrantY = Math.floor(Math.floor(index / 9) / 3);
-
-        return [quadrantX, quadrantY];
-    }
-
-    getQuadrantByIndex(index: number): number[] {
-        let quadrant: number[] = [];
-        let [quadrantX, quadrantY] = this.getQuadrantNumber(index);
-
-        let start = (quadrantY * 27) + (quadrantX * 3);
-        for (let i = start; i < start + 3; i++) {
-            if (this.board[i] === 0) {
-                continue;
-            }
-            quadrant.push(this.board[i]);
-        }
-        for (let i = start + 9; i < start + 12; i++) {
-            if (this.board[i] === 0) {
-                continue;
-            }
-            quadrant.push(this.board[i]);
-        }
-        for (let i = start + 18; i < start + 21; i++) {
-            if (this.board[i] === 0) {
-                continue;
-            }
-            quadrant.push(this.board[i]);
-        }
-
-        return quadrant;
-    }
-
     getPossibleNumbersByIndex(index: number): number[] {
-        const numbers = [...this.getColumn(index), ...this.getLine(index), ...this.getQuadrantByIndex(index)];
+        return [1, 2, 3, 4, 5, 6, 7, 8, 9].filter((n) => {
+            if (this.rows[this.getLine(index)].has(n)) {
+                return false;
+            }
+            if (this.cols[this.getColumn(index)].has(n)) {
+                return false;
+            }
+            const indexQuadrant = this.getQuadrant(index);
+            return !this.quadrant[indexQuadrant].has(n);
 
-        const allNumbers = new Set([1, 2, 3, 4, 5, 6, 7, 8, 9]);
-
-        numbers.forEach((number) => {
-            allNumbers.delete(number);
         });
+    }
 
-        return [...allNumbers];
+    createNumberRecursive(index: number = 0) {
+        if (index >= 81) {
+            return true;
+        }
+        this.drawBoard();
+
+        const listOfIndexes: number[] = this.getPossibleNumbersByIndex(index).sort(() => Math.random() - 0.5);
+        while(listOfIndexes.length > 0) {
+            this.board[index] = listOfIndexes.pop() as number;
+            this.counter++;
+            this.setNumberToColumnLineQuadrant(index, this.board[index]);
+            if (this.createNumberRecursive(index + 1)) {
+                return true;
+            }
+            this.removeNumberFromColumnLineQuadrant(index, this.board[index]);
+        }
     }
 
     createNumber() {
-        const index = this.index;
+        const index = this.indexStack;
 
         let possibleNumbers: number[] = [];
         if (this.stack[index] && Array.isArray(this.stack[index]) && this.stack[index].length > 0) {
+            this.removeNumberFromColumnLineQuadrant(index, this.board[index]);
             this.stack[index] = this.stack[index].filter((n) => n !== this.board[index]);
             possibleNumbers = this.stack[index];
         } else {
@@ -172,8 +134,11 @@ class Board {
         }
 
         if (possibleNumbers.length === 0) {
+            const currentValue = this.board[index];
+            this.removeNumberFromColumnLineQuadrant(index, currentValue);
             this.board[index] = 0;
-            this.index -= 1;
+            delete this.stack[index];
+            this.indexStack -= 1;
             return;
         }
 
@@ -181,7 +146,43 @@ class Board {
 
         this.stack[index] = possibleNumbers;
         this.board[index] = randomNumber;
-        this.index += 1;
+        this.setNumberToColumnLineQuadrant(index, randomNumber);
+        this.indexStack += 1;
+    }
+
+    getLine(index: number) {
+        return Math.floor(index / 9);
+    }
+
+    getColumn(index: number) {
+        return index % 9;
+    }
+
+    getQuadrant(index: number) {
+        const line = this.getLine(index);
+        const column = this.getColumn(index);
+
+        return Math.floor(line / 3) * 3 + Math.floor(column / 3);
+    }
+
+    setNumberToColumnLineQuadrant(index: number, number: number) {
+        const line = this.getLine(index);
+        const column = this.getColumn(index);
+
+        this.cols[column].add(number);
+        this.rows[line].add(number);
+        const quadrantIndex = this.getQuadrant(index);
+        this.quadrant[quadrantIndex].add(number);
+    }
+
+    removeNumberFromColumnLineQuadrant(index: number, number: number) {
+        const line = this.getLine(index);
+        const column = this.getColumn(index);
+
+        this.cols[column].delete(number);
+        this.rows[line].delete(number);
+        const quadrantIndex = this.getQuadrant(index);
+        this.quadrant[quadrantIndex].delete(number);
     }
 
     isFinished() {
@@ -198,27 +199,17 @@ class Board {
 
     generate() {
         this.clearTerminal();
-        while(true) {
-            this.createNumber();
-            this.counter++;
-            this.drawBoard();
-
-            if (this.isFinished()) {
-                break;
-            }
+        this.createNumberRecursive();
+        // while(true) {
+        //     this.createNumber();
+        //     this.counter++;
+        //     this.drawBoard();
+        //
+        //     if (this.isFinished()) {
+        //         break;
+        //     }
             // sleepSync(30);
-        }
-    }
-
-    generateOld() {
-        board.drawBoard();
-
-        for (let i = 0; i < 9*9; i++) {
-            const possibleNumbers = this.getPossibleNumbersByIndex(i);
-            const randomNumber = possibleNumbers[Math.floor(Math.random() * possibleNumbers.length)];
-            this.board[i] = randomNumber;
-            board.drawBoard();
-        }
+        // }
     }
 }
 

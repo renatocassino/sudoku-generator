@@ -20,7 +20,7 @@ impl Board {
     }
 
     fn draw_board(&mut self) {
-        std::thread::sleep(std::time::Duration::from_millis(200));
+        std::thread::sleep(std::time::Duration::from_millis(0));
         let mut board_map: Vec<String> = vec![];
         board_map.push(format!("counter: {}", self.counter));
         board_map.push(String::from(""));
